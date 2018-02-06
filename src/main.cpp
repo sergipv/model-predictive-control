@@ -13,9 +13,13 @@
 using json = nlohmann::json;
 
 // For converting back and forth between radians and degrees.
-constexpr double pi() { return M_PI; }
-double deg2rad(double x) { return x * pi() / 180; }
-double rad2deg(double x) { return x * 180 / pi(); }
+double deg2rad(double x) {
+  return x * M_PI / 180;
+}
+
+double rad2deg(double x) {
+  return x * 180 / M_PI;
+}
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -59,16 +63,34 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
       A(j, i + 1) = A(j, i) * xvals(j);
     }
   }
-
   auto Q = A.householderQr();
   auto result = Q.solve(yvals);
+
   return result;
+}
+
+void addLatency(double& px, double& py, double& psi, double& v, double delta, double Lf, double a, double latency) {
+  px += v * cos(psi) * latency;
+  py += v * sin(psi) * latency;
+  psi -= v * delta / Lf * latency;
+  v += a * latency;
+}
+
+void computeReferenceLine(vector<double>& x, vector<double>& y, Eigen::VectorXd coeffs) {
+  double poly_inc = 2.5;
+  double num_points = 25;
+  for (int i=0; i<num_points; i++) {
+    double x_point = poly_inc * i;
+    double y_point = polyeval(coeffs, x_point);
+    x.push_back(x_point);
+    y.push_back(y_point);
+  }
 }
 
 int main() {
   uWS::Hub h;
 
-  // Using MPC with 20 timesteps, evaluated every 0.05s.
+  // Using MPC with 10 timesteps, evaluated every 0.1s.
   MPC mpc;
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -94,27 +116,43 @@ int main() {
           double delta= j[1]["steering_angle"];
           double a = j[1]["throttle"];
 
-          double steer_value;
-          double throttle_value;
+          addLatency(px, py, psi, v, delta, Lf, a, 0.1);
+
+          for (size_t i=0; i<ptsx.size(); i++) {
+            double shift_x = ptsx[i] - px;
+            double shift_y = ptsy[i] - py;
+            ptsx[i] = shift_x * cos(-psi) - shift_y * sin(-psi);
+            ptsy[i] = shift_x * sin(-psi) + shift_y * cos(-psi);
+          }
+
+          Eigen::Map<Eigen::VectorXd> ptsx_eig(&ptsx[0], 6);
+          Eigen::Map<Eigen::VectorXd> ptsy_eig(&ptsy[0], 6);
+
+          Eigen::VectorXd coeffs = polyfit(ptsx_eig, ptsy_eig, 3);
+          
+          Eigen::VectorXd state(6);
+          state << 0, 0, 0, v, polyeval(coeffs,0), -atan(coeffs[1]);
+
+          auto vars = mpc.Solve(state, coeffs);
+
+          double steer_value = vars[0];
+          double throttle_value = vars[1];
 
           json msgJson;
-          msgJson["steering_angle"] = steer_value / deg2rad(25);
+          msgJson["steering_angle"] = steer_value / (deg2rad(25) * Lf);
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
-          // Initial state
-          State s;
-          initialState(s, coeffs);
-          updateState(s, dt);
-
-
-
-
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Green line
+          for (size_t i = 2; i < vars.size(); i++) {
+            if (i % 2 == 0) {
+              mpc_x_vals.push_back( vars[i] );
+            } else {
+              mpc_y_vals.push_back( vars[i] );
+            }
+          }
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
@@ -123,8 +161,7 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Yellow line
+          computeReferenceLine(next_x_vals, next_y_vals, coeffs);
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
@@ -134,6 +171,7 @@ int main() {
           std::cout << msg << std::endl;
           // Latency, to simulate real conditions.
           this_thread::sleep_for(chrono::milliseconds(100));
+
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
@@ -173,23 +211,5 @@ int main() {
     return -1;
   }
   h.run();
-}
-
-void initialState(State& s, const Eigen::VectorXd v) {
- s.x = 0;
- s.y = 0;
- s.psi = 0;
- s.cte = v[0];
- s.epsi = -atan(v[1]);
-}
-
-// dt in ms
-void updateState(State& s, double v, double delta, double dt) {
-  s.x += v * cos(s.psi) * dt;
-  s.x += v * sin(s.psi) * dt;
-  s.psi -= v * delta * dt / Lf;
-  s.v = v + a * dt;
-  s.cte += v * sin(s.epsi) * dt;
-  s.epsi *= 1 - v * dt / Lf;
 }
 

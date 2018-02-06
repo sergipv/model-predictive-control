@@ -10,37 +10,27 @@ MPC::~MPC() {}
 
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
-  size_t i;
 
   Dvector vars(n_vars);
   initializeVars(vars, state);
+	for (size_t i = 0; i < n_vars; i++) {
+    vars[i] = 0;
+  }
 
   Dvector vars_lower(n_vars);
   Dvector vars_upper(n_vars);
 
   setupVarBounds(vars_lower, vars_upper);
 
-  Dvector constraints_lower(n_constraints);
+	Dvector constraints_lower(n_constraints);
   Dvector constraints_upper(n_constraints);
 
   setupConstraintBounds(constraints_lower, constraints_upper, state);
-
+    
   FG_eval fg_eval(coeffs);
 
-  std::string options;
-  // Uncomment this if you'd like more print information
-  options += "Integer print_level  0\n";
-  // NOTE: Setting sparse to true allows the solver to take advantage
-  // of sparse routines, this makes the computation MUCH FASTER. If you
-  // can uncomment 1 of these and see if it makes a difference or not but
-  // if you uncomment both the computation time should go up in orders of
-  // magnitude.
-  options += "Sparse  true        forward\n";
-  options += "Sparse  true        reverse\n";
-  // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
-  // Change this as you see fit.
-  options += "Numeric max_cpu_time          0.5\n";
-
+  std::string options = getOptions();
+  
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
 
@@ -55,7 +45,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // Cost
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
-
 
 	vector<double> result;
 	result.push_back(solution.x[delta_start]);
@@ -73,27 +62,16 @@ void MPC::initializeVars(Dvector& vars, const Eigen::VectorXd state) {
   for (size_t i = 0; i < n_vars; i++) {
     vars[i] = 0;
   }
-  addState(vars, state);
-}
-
-void MPC::addState(Dvector& v, const Eigen::VectorXd state) {
-  v[x_start] = state[0];
-  v[y_start] = state[1];
-  v[psi_start] = state[2];
-  v[v_start] = state[3];
-  v[cte_start] = state[4];
-  v[epsi_start] = state[5];
-
 }
 
 void MPC::setupVarBounds(Dvector& lower, Dvector& upper) {
   for (size_t i=0; i<delta_start; i++) {
-    lower[i] = numeric_limits<double>::min();
-    upper[i] = numeric_limits<double>::max();
+    lower[i] = -1.0e19;// numeric_limits<double>::min();
+    upper[i] = 1.0e19;// numeric_limits<double>::max();
   }
   for (size_t i=delta_start; i<a_start; i++) {
-    lower[i] = -0.436332;
-    upper[i] = 0.436332;
+    lower[i] = -0.436332 * Lf;
+    upper[i] = 0.436332 * Lf;
   }
   for (size_t i=a_start; i<n_vars; i++) {
     lower[i] = -1.0;
@@ -108,4 +86,32 @@ void MPC::setupConstraintBounds(Dvector& lower, Dvector& upper, const Eigen::Vec
   }
   addState(lower, state);
   addState(upper, state);
+}
+
+void MPC::addState(Dvector& v, const Eigen::VectorXd state) {
+  v[x_start] = state[0];
+  v[y_start] = state[1];
+  v[psi_start] = state[2];
+  v[v_start] = state[3];
+  v[cte_start] = state[4];
+  v[epsi_start] = state[5];
+
+}
+
+std::string MPC::getOptions() {
+  std::string options;
+
+  options += "Integer print_level  0\n";
+  // NOTE: Setting sparse to true allows the solver to take advantage
+  // of sparse routines, this makes the computation MUCH FASTER. If you
+  // can uncomment 1 of these and see if it makes a difference or not but
+  // if you uncomment both the computation time should go up in orders of
+  // magnitude.
+  options += "Sparse  true        forward\n";
+  options += "Sparse  true        reverse\n";
+  // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
+  // Change this as you see fit.
+  options += "Numeric max_cpu_time          0.5\n";
+
+  return options;
 }
