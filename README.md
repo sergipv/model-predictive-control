@@ -76,13 +76,14 @@ v += a * latency; // velocity updated with the acceleration * dt.
 
 Then, we simulate the latency of the sensors by sleeping the input method 100ms.
 
-## Problems during the implementation and Results
+## Problems during the implementation 
 
-During the implementation, there were a few things that made my work a bit harder; the current implementation does not work when I increment the number of points in the future to 20, and if I decrease the dt. I didn't play a lot with that but maybe using timestamps of the input values would allow more precise dt? 
+A bug I had for a while, was the use of numerical limits for lower and upper bounds for the vars. I wasted a lot of time assuming that numeric_limits<double>::min() and max() were what I needed, but the code did not work (weird actuator signals).
 
-Another bug I had for a while, was the use of numerical limits for lower and upper bounds for the vars. I wasted a lot of time assuming that numeric_limits<double>::min() and max() were what I needed, but the code did not work (weird actuator signals).
 
-Once these two bugs were addressed, the car could drive around the track flawlessly. I tried increasing the speed up to 90mph with no problems. I ended up implementing the MPC with dt = 0.1 and N = 10, which gave good results.
+## Results
+
+The vehicle was able to drive around the circuit at up to 85mph without crossing the yellow lines.
 
 ![Simulator result turning left](images/turn_left.png)
 ![Simulator result top speed](images/top_speed.png)
