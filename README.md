@@ -38,10 +38,15 @@ As mentioned before, we are using two actuators: steering angle and throttle, wh
 The update equations are written in the updatePrediction method of FG_eval:
 
 fg[1+x_start+t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
+
 fg[1+y_start+t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
+
 fg[1+psi_start+t] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
+
 fg[1+v_start+t] = v1 - (v0 + a0 * dt);
+
 fg[1+cte_start+t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
+
 fg[1+epsi_start+t] = epsi1 - ((psi0 - psides0) - v0 * delta0 / Lf * dt);
 
 ## Chosing N and dt
@@ -57,8 +62,11 @@ Since I am using car coordinates through the simulation, I needed to compute the
 The main equations for this change are:
 
 double tx = x[i] - px;
+
 double ty = y[i] - py;
+
 x[i] = tx * cos(-psi) - ty * sin(-psi);
+
 y[i] = tx * sin(-psi) + ty * cos(-psi);
 
 Where (px,py) are the coordinates of the car, and (x,y) the waypoints.
@@ -70,8 +78,11 @@ I also compute for visual comparison the reference line that shows the "ideal" t
 To add some latency into the system (100ms), I update the data received from the sensors using the following equations:
 
 px += v * cos(psi) * latency; // x position updated with the x component of the velocity * dt.
+
 py += v * sin(psi) * latency; // y position updated with the y component of the velocity * dt.
+
 psi -= v * delta / Lf * latency; // updating the angle of the car.
+
 v += a * latency; // velocity updated with the acceleration * dt.
 
 Then, we simulate the latency of the sensors by sleeping the input method 100ms.
