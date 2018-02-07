@@ -9,7 +9,7 @@ using namespace std;
 
 typedef CPPAD_TESTVECTOR(double) Dvector;
 
-const size_t N = 12;
+const size_t N = 10;
 const double dt = 0.1;
 const size_t x_start = 0;
 const size_t y_start = N;
