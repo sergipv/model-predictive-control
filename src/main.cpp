@@ -87,6 +87,23 @@ void computeReferenceLine(vector<double>& x, vector<double>& y, Eigen::VectorXd 
   }
 }
 
+void coordinateTransformation(vector<double>& x, vector<double>& y, const double px, const double py, const double psi) {
+  for (size_t i=0; i<x.size(); i++) {
+    double tx = x[i] - px;
+    double ty = y[i] - py;
+    x[i] = tx * cos(-psi) - ty * sin(-psi);
+    y[i] = tx * sin(-psi) + ty * cos(-psi);
+  }
+}
+
+// Computes the coefficient for a polynomial fitting
+Eigen::VectorXd computeCoeffs(vector<double> x, vector<double> y) {
+    Eigen::Map<Eigen::VectorXd> ptsx_eig(&x[0], 6);
+    Eigen::Map<Eigen::VectorXd> ptsy_eig(&y[0], 6);
+
+    return polyfit(ptsx_eig, ptsy_eig, 3);
+}
+
 int main() {
   uWS::Hub h;
 
@@ -117,22 +134,11 @@ int main() {
           double a = j[1]["throttle"];
 
           addLatency(px, py, psi, v, delta, Lf, a, 0.1);
+          coordinateTransformation(ptsx, ptsy, px, py, psi);
+          Eigen::VectorXd coeffs = computeCoeffs(ptsx, ptsy);
 
-          for (size_t i=0; i<ptsx.size(); i++) {
-            double shift_x = ptsx[i] - px;
-            double shift_y = ptsy[i] - py;
-            ptsx[i] = shift_x * cos(-psi) - shift_y * sin(-psi);
-            ptsy[i] = shift_x * sin(-psi) + shift_y * cos(-psi);
-          }
-
-          Eigen::Map<Eigen::VectorXd> ptsx_eig(&ptsx[0], 6);
-          Eigen::Map<Eigen::VectorXd> ptsy_eig(&ptsy[0], 6);
-
-          Eigen::VectorXd coeffs = polyfit(ptsx_eig, ptsy_eig, 3);
-          
           Eigen::VectorXd state(6);
           state << 0, 0, 0, v, polyeval(coeffs,0), -atan(coeffs[1]);
-
           auto vars = mpc.Solve(state, coeffs);
 
           double steer_value = vars[0];
